@@ -1,0 +1,171 @@
+---
+title: "Central Limit Theorem Visualized"
+author: "Casey Moroney"
+date: "11/17/2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Intro
+The central limit theorem is a primary concept in probability theory that has applications in many areas of statistics. 
+
+>The central limit theorem states that if you have a population with mean $\mu$ and standard deviation $\sigma$ and take sufficiently large random samples from the population with replacement, then the distribution of the sample means will be approximately normally distributed. This will hold true regardless of whether the source population is normal or skewed, provided the sample size is sufficiently large (usually n > 30). 
+[(LaMorte, 2016)](https://sphweb.bumc.bu.edu/otlt/mph-modules/bs/bs704_probability/BS704_Probability12.html#:~:text=The%20central%20limit%20theorem%20states,will%20be%20approximately%20normally%20distributed)
+
+Put simply, it means that if you take a large enough sample size you can use assumptions from the normal distribution to make inferences, even if the population you are sampling from is not normally distributed. 
+
+We can visualize this using simulations. Let's generate a sample from an exponential distribution.
+
+```{r exponential}
+exponential_population <- rexp(100000)
+
+# Create histogram
+hist(exponential_population)
+
+# View the first 100 values
+exponential_population[1:100]
+
+# Summary stats
+summary(exponential_population)
+boxplot(exponential_population)
+```
+
+We can see that the distribution has a long tail, mean of `r round(mean(exponential_population), 2)`, and median `r round(median(exponential_population),2)`.
+
+According to the CLT if we take repeated samples with replacement from this population, the sample means will be normally distributed (provided the sample size is sufficient). We will start with samples of 100 random observations repeated 10 times then observe the sample means.
+
+```{r first_sampling}
+samples <- array()
+
+for(i in 1:10){
+  s <- sample(exponential_population, 100)
+  mu <- mean(s)
+  samples[i] <- mu
+}
+
+samples
+hist(samples)
+```
+
+The distribution looks more normal than exponantial, but not quite there yet. In order for CLT to hold, we need to sample the population a *sufficiently large* number of times. Let's try 100 samples:
+
+```{r second_sample}
+samples <- array()
+
+for(i in 1:100){
+  s <- sample(exponential_population, 100)
+  mu <- mean(s)
+  samples[i] <- mu
+}
+
+samples
+hist(samples)
+```
+
+This looks even moreso normal, with tails being much smaller and the center of the distribution having more definition. Let's try 100,000:
+
+```{r third_sample}
+samples <- array()
+
+for(i in 1:5000){
+  s <- sample(exponential_population, 100)
+  mu <- mean(s)
+  samples[i] <- mu
+}
+
+hist(samples)
+```
+
+For comparison, let's plot samples from a normal distribution:
+
+```{r normal_sample}
+hist(rnorm(5000, mean=1))
+```
+
+As mentioned, this works for any distribution. To demonstrate, let's simulate data from other distributions and visualize.  
+
+```{r other_dist_functions}
+# Function for simulating data from a given distribution
+generate_dist <- function(name, sample_func, n, ss=0.1*n, sims){
+  dist <- {}
+  dist$name <- name
+  dist$obs <- sample_func(n)
+  dist$ss <- ss
+  dist$sample_means <- array()
+    
+  for(i in seq(1:sims)){
+    s <- sample(dist$obs, ss, replace=TRUE)
+    mu <- mean(s)
+    dist$sample_means[i] <- mu
+  }
+  
+  return(dist)
+}
+
+# Modified sample functions to set default parameters
+rpois_mod <- function(n){return(rpois(n=n, lambda=1))}
+beta_05_05 <- function(n){return(rbeta(n=n, shape1=0.5, shape2=0.5))}
+beta_5_1 <- function(n){return(rbeta(n=n, shape1=5, shape2=1))}
+
+# Function for generating a list containing data from several distributions
+generate_dist_list <- function(n, ss, sims){
+  list_out <- list(
+    generate_dist("Normal(0,1)", rnorm, n, ss, sims),
+    generate_dist("Exponential(1)", rexp, n, ss, sims),
+    generate_dist("Uniform(0,1)", runif, n, ss, sims),
+    generate_dist("Poisson(1)", rpois_mod, n, ss, sims),
+    generate_dist("Beta(0.5,0.5)", beta_05_05, n, ss, sims),
+    generate_dist("Beta(5,1)", beta_5_1, n, ss, sims)
+  )
+  return(list_out)
+}
+
+# Create distribution list
+dist_list <- generate_dist_list(1000000, ss=50, sims=10000)
+
+# Set up and iterate through data list to plot
+par(mfrow=c(2,3))
+for(dist in dist_list){
+  n_size <- format(length(dist$obs), big.mark=",")
+  hist(dist$obs, main=paste0(dist$name, " \n (N=", n_size, ")"))
+}
+```
+
+What happens to sample mean distributions if we use a small sample size (n=5)?
+
+```{r small_ss}
+dist_list <- generate_dist_list(1000000, ss=5, sims=10000)
+
+par(mfrow=c(2,3))
+for(dist in dist_list){
+  ss <- format(dist$ss)
+  sims <- format(length(dist$sample_means), big.mark=",")
+  hist(dist$sample_means, 
+       main=paste0(dist$name, " Sample Dist. \n (n=", dist$ss, ", ", sims, " simulations)"))
+}
+```
+
+A large number of sample means from small samples still appears normal when the population is normally distributed, but you can see that samples from other distributions have non-normal traits. Exponential, Poisson, and Beta($\alpha$=5, $\beta$=1) all show skew, while Beta($\alpha$=0.5, $\beta$=0.5) and Uniform(0,1) sample mean distributions have heavier tails.
+
+Repeated again, this time with a larger sample size (n=100):
+
+```{r large_sample_size}
+dist_list <- generate_dist_list(1000000, ss=100, sims=10000)
+
+par(mfrow=c(2,3))
+for(dist in dist_list){
+  ss <- format(dist$ss)
+  sims <- format(length(dist$sample_means), big.mark=",")
+  hist(dist$sample_means, 
+       main=paste0(dist$name, " Sample Dist. \n (n=", dist$ss, ", ", sims, " simulations)"))
+}
+```
+
+Back to normality! 
